@@ -9,6 +9,11 @@
 
 TinyGPSPlus gps;
 
+#define IP "192.168.43.73"
+#define PORT "80"
+#define BASE_API "http://" IP ":" PORT "/api/travels/tracking"
+char currentTravel_id[25] = "61cf55263a4b45ed19e30616";
+
 void conectaWiFi(){
   Serial.println();
 
@@ -34,28 +39,42 @@ void setup() {
  Serial1.begin(9600, SERIAL_8N1, RXD2, TXD2); //gps baud
 }
 
-void atualizaLocalizacaoAtualAPI (double latitude, double longitude){
+/*char* getEndpoint(){
+    char endpoint[128];
+    sprintf(endpoint, "%s/%s", BASE_API, currentTravel_id);
+    return endpoint;
+}*/
+
+void sendCurrentLocationToAPI (double lat, double lng, double speed){
   if(WiFi.status()== WL_CONNECTED){
     HTTPClient http;
-    http.begin("http://192.168.101:80/api/viagens/61c91ba095d669011a03c25f");
+
+    char endpoint[128];
+    sprintf(endpoint, "%s/%s", BASE_API, currentTravel_id);
+    
+    Serial.println(endpoint);
+    http.begin(endpoint);
     http.addHeader("Content-Type", "application/json");
     
     char httpRequestData[128];
-    sprintf(httpRequestData, "{\"lat\": \"%f\", \"long\": \"%f\"}", latitude, longitude);
+    sprintf(httpRequestData, "{\"lat\": \"%f\", \"lng\": \"%f\", \"speed\": \"%f\"}", lat, lng, speed);
     
     int httpResponseCode = http.PUT(httpRequestData);
-    String payload = http.getString();
+    //String payload = http.getString();
     
-    Serial.print("HTTP Response code: ");
+    Serial.print("HTTP response code: ");
     Serial.println(httpResponseCode);
+    //Serial.print(" | Payload: ");
+    //Serial.println(payload);
     
     http.end(); // Free resources
   } else {
     Serial.println("WiFi Disconnected");
+    conectaWiFi();
   }
 }
 
-void obtemLocalizacaoAtual(){
+void getCurrentLocation(){
   bool recebido = false;
   while (Serial1.available()) {
      char cIn = Serial1.read();
@@ -63,27 +82,36 @@ void obtemLocalizacaoAtual(){
   }
   
   if (gps.location.isUpdated() && gps.altitude.isUpdated()){
-    Serial.print("D/M/A: ");
-    Serial.print(gps.date.value());
-    Serial.print(" | alt: ");
-    Serial.print(gps.altitude.feet());
-    Serial.print(" | satellites: ");
-    Serial.println(gps.satellites.value());
+    //Serial.print("D/M/A: ");
+    //Serial.print(gps.date.value());
+    //Serial.print(" | alt: ");
+    //Serial.print(gps.altitude.feet());
+    //Serial.print(" | satellites: ");
+    //Serial.println(gps.satellites.value());
 
-    double latitude = gps.location.lat();
-    double longitude = gps.location.lng();
-    Serial.println("Latitude");
-    Serial.println(latitude, 6);
-    Serial.println("Longitude");
-    Serial.println(longitude, 6);
-
-    atualizaLocalizacaoAtualAPI(latitude, longitude);
+    double lat = gps.location.lat();
+    double lng = gps.location.lng();
+    double speed = gps.speed.kmph();
+    double course = gps.course.deg();
     
-    delay(15000);
+    Serial.print("lat: ");
+    Serial.print(lat, 6);
+    Serial.print(" | lng: ");
+    Serial.print(lng, 6);
+    Serial.print(" | speed: ");
+    Serial.print(speed, 6);
+    //Serial.print(" | Date: ");
+    //Serial.print(gps.date.value());
+    //Serial.print(" | Time: ");
+    //Serial.print(gps.time.value());
+    Serial.println();
+
+    sendCurrentLocationToAPI(lat, lng, speed);
+    
+    delay(10000);
   }
 }
 
 void loop() {
-  obtemLocalizacaoAtual();
- 
+  getCurrentLocation();
 }
