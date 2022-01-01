@@ -115,7 +115,7 @@ void getCurrentLocation(){
   }
 }
 
-void searchTrip(){
+void getTravelInProgress(){
   //logic
 }
 
@@ -123,6 +123,6 @@ void loop() {
   if (travelInProgress){
     getCurrentLocation();
   } else {
-    searchTrip();
+    getTravelInProgress();
   }
 }
