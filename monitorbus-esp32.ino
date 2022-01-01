@@ -2,6 +2,7 @@
 #include <HTTPClient.h>
 #include <HardwareSerial.h>
 #include <TinyGPS++.h>
+#include <Arduino_JSON.h>
 #include "secrets.h"
 
 #define RXD2 16
@@ -12,7 +13,7 @@ TinyGPSPlus gps;
 // API Settings
 #define IP "192.168.43.73"
 #define PORT "80"
-#define BASE_API "http://" IP ":" PORT "/api/travels/tracking"
+#define BASE_API "http://" IP ":" PORT "/api/travels"
 
 #define BUS_ID "61cf536fe2d293f2a0766871"
 
@@ -45,78 +46,111 @@ void setup() {
 }
 
 void sendCurrentLocationToAPI (double lat, double lng, double speed){
-  if(WiFi.status()== WL_CONNECTED){
+  Serial.println("Enviando localização atual do ônibus para o servidor.");
+  if(WiFi.status() == WL_CONNECTED){
     HTTPClient http;
 
     char endpoint[128];
-    sprintf(endpoint, "%s/%s", BASE_API, travel_id);
+    sprintf(endpoint, "%s/tracking/%s", BASE_API, travel_id);
     
-    Serial.println(endpoint);
     http.begin(endpoint);
     http.addHeader("Content-Type", "application/json");
     
     char httpRequestData[128];
     sprintf(httpRequestData, "{\"lat\": \"%f\", \"lng\": \"%f\", \"speed\": \"%f\"}", lat, lng, speed);
 
+    Serial.print("Payload: ");
+    Serial.println(httpRequestData);
+
+    Serial.print("PUT: ");
+    Serial.println(endpoint);
     int httpResponseCode = http.PUT(httpRequestData);
-    //String payload = http.getString();
     
-    Serial.print("Código de Resposta HTTP: ");
+    Serial.print("Status: ");
     Serial.println(httpResponseCode);
-    
-    //Serial.print(" | Payload: ");
-    //Serial.println(payload);
-    
+
     http.end(); // Free resources
 
-    if(httpResponseCode == 403){
-      Serial.println("Viagem encerrada.");
-      travelingInProgress = false;
+    if(httpResponseCode > 0){
+      if(httpResponseCode == 403){
+        Serial.println("Viagem encerrada.");
+        travelInProgress = false;
+        strncpy(travel_id, "", sizeof(travel_id));
+      } else if (httpResponseCode != 200){
+        Serial.println("O servidor não retornou um status de sucesso para a requisição!");
+      }
+    } else {
+      Serial.println("Falha ao enviar requisição.");
     }
   } else {
     Serial.println("Desconectado do Wi-Fi");
     connectToWiFi();
   }
+  Serial.println();
 }
 
 void getCurrentLocation(){
-  bool received = false;
+  //Serial.println("Obtendo localização atual do ônibus.");
   while (Serial1.available()) {
-     char cIn = Serial1.read();
-     received = gps.encode(cIn);
+     gps.encode(Serial1.read());
   }
   
-  //if (gps.location.isUpdated() && gps.altitude.isUpdated()){
-  if (received){
-    //Serial.print(" | alt: ");
-    //Serial.print(gps.altitude.feet());
-    //Serial.print(" | satellites: ");
-    //Serial.println(gps.satellites.value());
-
+  if (gps.location.isUpdated()){
     double lat = gps.location.lat();
     double lng = gps.location.lng();
     double speed = gps.speed.kmph();
-    
-    Serial.print("lat: ");
-    Serial.print(lat, 6);
-    Serial.print(" | lng: ");
-    Serial.print(lng, 6);
-    Serial.print(" | speed: ");
-    Serial.print(speed, 6);
-    //Serial.print(" | Date: ");
-    //Serial.print(gps.date.value());
-    //Serial.print(" | Time: ");
-    //Serial.print(gps.time.value());
-    Serial.println();
 
     sendCurrentLocationToAPI(lat, lng, speed);
-    
-    delay(5000);
-  }
+  } /*else {
+    Serial.println("O ônibus não está se movimentando!");
+  }*/
 }
 
 void getTravelInProgress(){
-  //logic
+  Serial.print("Buscando viagem em andamento para o ônibus com ID: ");
+  Serial.println(BUS_ID);
+  
+  if(WiFi.status() == WL_CONNECTED){
+    HTTPClient http;
+
+    char endpoint[128];
+    sprintf(endpoint, "%s/inProgress/%s", BASE_API, BUS_ID);
+    
+    http.begin(endpoint);
+
+    Serial.print("GET: ");
+    Serial.println(endpoint);
+    int httpResponseCode = http.GET();
+    String payload = http.getString();
+    
+    Serial.print("Status: ");
+    Serial.println(httpResponseCode);
+
+    http.end(); // Free resources
+
+    if(httpResponseCode > 0){
+      if(httpResponseCode == 200){
+        JSONVar travel = JSON.parse(payload);
+    
+        if (JSON.typeof(travel) != "undefined" && travel["_id"] != null){
+          travelInProgress = true;
+          strncpy(travel_id, travel["_id"], sizeof(travel_id));
+          Serial.print("Viagem em andamento com esse ônibus identificada. ID: ");
+          Serial.println(travel_id);
+        } else {
+          Serial.println("Nenhuma viagem em andamento com esse ônibus foi encontrada.");
+        }
+      } else {
+        Serial.println("O servidor não retornou um status de sucesso para a requisição!");
+      }
+    } else {
+      Serial.println("Falha ao enviar requisição.");
+    }
+  } else {
+    Serial.println("Desconectado do Wi-Fi");
+    connectToWiFi();
+  }
+  Serial.println();
 }
 
 void loop() {
@@ -125,4 +159,6 @@ void loop() {
   } else {
     getTravelInProgress();
   }
+  
+  delay(5000);
 }
