@@ -11,11 +11,11 @@
 TinyGPSPlus gps;
 
 // API Settings
-#define IP "192.168.43.73"
-#define PORT "80"
-#define BASE_API "http://" IP ":" PORT "/api/travels"
+#define IP "192.168.0.101"
+#define PORT "3001"
+#define BASE_API "http://" IP ":" PORT "/api/trips"
 
-#define BUS_ID "61cf536fe2d293f2a0766871"
+#define BUS_ID "63081a39555fc889e645454d"
 
 bool travelInProgress = false;
 char travel_id[25] = "";
@@ -51,7 +51,7 @@ void sendCurrentLocationToAPI (double lat, double lng, double speed){
     HTTPClient http;
 
     char endpoint[128];
-    sprintf(endpoint, "%s/tracking/%s", BASE_API, travel_id);
+    sprintf(endpoint, "%s/%s/currentVehicleLocation", BASE_API, travel_id);
     
     http.begin(endpoint);
     http.addHeader("Content-Type", "application/json");
@@ -62,9 +62,9 @@ void sendCurrentLocationToAPI (double lat, double lng, double speed){
     Serial.print("Payload: ");
     Serial.println(httpRequestData);
 
-    Serial.print("PUT: ");
+    Serial.print("POST: ");
     Serial.println(endpoint);
-    int httpResponseCode = http.PUT(httpRequestData);
+    int httpResponseCode = http.POST(httpRequestData);
     
     Serial.print("Status: ");
     Serial.println(httpResponseCode);
